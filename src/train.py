@@ -19,9 +19,11 @@ if __name__ == '__main__':
 		tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)),
 		drop_rate=0.4,
 		interval=50,
-		steps=100000,
-		learning_rate=3e-4,
+		steps=600000,
+		learning_rate=8e-5,
 		batch_size=128,
+		model_path='../model',
+		tensorboard_path='../TensorBoard'
 		)
 
 	gan.train()
