@@ -258,7 +258,6 @@ class DCGAN(object):
         self.saver = tf.train.Saver()
 
     def save_model(self, step=None):
-
         self.saver.save(self.sess, os.path.join(self.model_path, "model.ckpt"), global_step=step)
 
     def save_result(self, step):
