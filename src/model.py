@@ -96,6 +96,7 @@ class DCGAN(object):
             activation = lrelu
         else:
             activation = tf.nn.sigmoid
+            # activation = tf.nn.tanh
 
         tmp = tf.layers.conv2d_transpose(
                 inputs=inputs,
@@ -122,10 +123,6 @@ class DCGAN(object):
         tmp = tf.nn.leaky_relu(tmp, alpha=alpha)
         return tmp
 
-    def binary_cross_entropy(self, label, z):
-    	eps = 1e-12
-    	return (-(label * tf.log(z + eps) + (1. - label) * tf.log(1. - z + eps)))
-
     def generator(self, z, keep_prob, is_training):
         with tf.variable_scope('generator') as scope:
             print ('=======================================================================')
@@ -134,34 +131,34 @@ class DCGAN(object):
             x = z
             print ('{:50} {}'.format(x.name, x.shape))
             # project and reshape 1*1*1024
-            x = tf.layers.dense(x, units=1024, activation=tf.nn.relu, 
+            x = tf.layers.dense(x, units=1*1*1024, activation=tf.nn.relu, 
             	kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
                 bias_initializer=tf.truncated_normal_initializer(stddev=0.02))
             x = tf.reshape(x, shape=[-1, 1, 1, 1024])
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 3*3*1024
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x, 1024, [3, 3], padding='valid')
+            x = self.deconv2d(x,  512, [3, 3], padding='valid')
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 6*6*512
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,  512, [3, 3])
+            x = self.deconv2d(x,  256, [3, 3])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 12*12*256
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,  256, [3, 3])
+            x = self.deconv2d(x,  128, [3, 3])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 24*24*128
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,  128, [3, 3])
+            x = self.deconv2d(x,   64, [3, 3])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 48*48*64
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,  64, [3, 3])
+            x = self.deconv2d(x,   32, [3, 3])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 96*96*3
@@ -208,16 +205,18 @@ class DCGAN(object):
             x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 1*1*1
-            x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.conv2d(x, 1024, [3, 3])
-            x = tf.layers.dropout(x, keep_prob)
-            print ('{:50} {}'.format(x.name, x.shape))
+            # x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
+            # x = self.conv2d(x,  512, [3, 3])
+            # x = tf.layers.dropout(x, keep_prob)
+            # print ('{:50} {}'.format(x.name, x.shape))
             # reshape
             x = tf.layers.flatten(x)
-            x = tf.layers.dense(x, units=1, activation=tf.nn.sigmoid)
+            x = tf.layers.dense(x, units=1)
             print ('{:50} {}\n'.format(x.name, x.shape))
 
-        return x
+            logits = x
+
+        return logits, tf.nn.sigmoid(logits)
 
     def CreateModel(self):
 
@@ -229,18 +228,24 @@ class DCGAN(object):
         self.lr = tf.placeholder(tf.float32, name='learning_rate')
 
         # models
-        self.G      = self.generator(self.noise, self.dropout, self.is_training)
-        self.D_real = self.discriminator(self.image, self.dropout, self.is_training)
-        self.D_fake = self.discriminator(self.G, self.dropout, self.is_training, reuse=True)
+        self.G                          = self.generator(self.noise, self.dropout, self.is_training)
+        self.D_real_logits, self.D_real = self.discriminator(self.image, self.dropout, self.is_training)
+        self.D_fake_logits, self.D_fake = self.discriminator(self.G, self.dropout, self.is_training, reuse=True)
 
         self.sum_img = tf.summary.image('generated', self.G, max_outputs=4)
+        self.sum_real_out = tf.summary.histogram('real_img_result_the_closer_to_1_the_better', self.D_real)
+        self.sum_fake_out = tf.summary.histogram('fake_img_result_the_closer_to_0_the_better', self.D_fake)
+        self.sum_gen_out  = tf.summary.histogram('gen__img_result_the_closer_to_1_the_better', self.D_fake)
 
         # define loss
+        def sigmoid_cross_entropy_with_logits(y, x):
+        	return tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=x)
+
         with tf.name_scope('Loss'):
-	        self.G_loss = tf.reduce_mean(self.binary_cross_entropy(tf.ones_like(self.D_fake), self.D_fake))
-	        self.D_loss_real = self.binary_cross_entropy(tf.ones_like(self.D_real), self.D_real)
-	        self.D_loss_fake = self.binary_cross_entropy(tf.zeros_like(self.D_fake), self.D_fake)
-	        self.D_loss = tf.reduce_mean(0.5 * (self.D_loss_real + self.D_loss_fake))
+	        self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_fake), self.D_fake_logits))
+	        self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_real), self.D_real_logits))
+	        self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.zeros_like(self.D_fake), self.D_fake_logits))
+	        self.D_loss = self.D_loss_real + self.D_loss_fake
 
         self.sum_g = tf.summary.scalar('G_loss', self.G_loss)
         self.sum_d = tf.summary.scalar('D_loss', self.D_loss)
@@ -339,24 +344,24 @@ class DCGAN(object):
        		}
 
        		# update D network
-       		things = [self.D_opt, self.sum_d, self.D_loss_real, self.D_loss_fake, self.D_loss, self.sum_lr]
-       		_, summary_d, d_loss_real, d_loss_fake, d_loss, summary_lr = self.sess.run(things, feed_dict=feed_dict_d)
+       		things = [self.D_opt, self.sum_d, self.D_loss_real, self.D_loss_fake, self.D_loss, self.sum_lr, self.sum_real_out, self.sum_fake_out]
+       		_, summary_d, d_loss_real, d_loss_fake, d_loss, summary_lr, summary_real_out, summary_fake_out = self.sess.run(things, feed_dict=feed_dict_d)
        		
        		writer.add_summary(summary_d, step)
        		writer.add_summary(summary_lr, step)
+       		writer.add_summary(summary_real_out, step)
+       		writer.add_summary(summary_fake_out, step)
 
        		# update G network
-       		_, g_loss = self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
+       		self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
 
        		# update G network twice
-       		things = [self.G_opt, self.sum_g, self.G_loss, self.sum_img]
-       		_, summary, g_loss, image = self.sess.run(things, feed_dict=feed_dict_g)
+       		things = [self.G_opt, self.sum_g, self.G_loss, self.sum_img, self.sum_gen_out]
+       		_, summary, g_loss, image, summary_gen_out = self.sess.run(things, feed_dict=feed_dict_g)
        		
        		writer.add_summary(summary, step)
        		writer.add_summary(image, step)
-
-       		d_loss_real = d_loss_real.mean()
-       		d_loss_fake = d_loss_fake.mean()
+       		writer.add_summary(summary_gen_out, step)
 
        		print ("Step: [%6d/%6d] time: %4.4fs, lr: %.3e, d_loss_real: %.4f, d_loss_fake: %.4f, d_loss: %.4f, g_loss: %.4f" \
           			% (step, self.steps, time.time() - start_time, learning_rate, d_loss_real, d_loss_fake, d_loss, g_loss))
