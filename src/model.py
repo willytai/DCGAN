@@ -259,14 +259,7 @@ class DCGAN(object):
 
     def save_model(self, step=None):
 
-        if step is None:
-            if not os.path.isdir(os.path.join(self.model_path, 'best')):
-                os.mkdir(os.path.join(self.model_path, 'best'))
-            self.saver.save(self.sess, os.path.join(self.model_path, 'best', "model.ckpt"))
-        else:
-            if not os.path.isdir(os.path.join(self.model_path, 'step-'+str(step))):
-                os.mkdir(os.path.join(self.model_path, 'step-'+str(step)))
-            self.saver.save(self.sess, os.path.join(self.model_path, 'step-'+str(step), "model.ckpt"))
+        self.saver.save(self.sess, os.path.join(self.model_path, "model.ckpt"), global_step=step)
 
     def save_result(self, step):
 
@@ -378,19 +371,10 @@ class DCGAN(object):
         		print ('-------------------------------------------------------')
         		print ('- Best g_loss: %.4f' % total_loss, 'Current g_loss: %.4f' % g_loss)
         		print ('- Learning rate: %.8f' % learning_rate)
-
-        		if total_loss > g_loss and step >= 10000:
-        			total_loss = g_loss
-
-        			if step >= 10000:
-        				self.save_model()
-        				print ('- Saving model to {}'.format(self.model_path))
-        		
-        				self.save_result(step)
         		print ('-------------------------------------------------------')
 
         	# save model every 1000 step after updating 50000 times
-        	if step != 0 and step >= 50000 and step % 10000 == 0:
+        	if step != 0 and step >= 30000 and step % 5000 == 0:
         		self.save_model(step=step)
 
     def ReadData(self):

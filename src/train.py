@@ -22,8 +22,8 @@ if __name__ == '__main__':
 		steps=600000,
 		learning_rate=5e-5,
 		batch_size=128,
-		model_path='../model_v2',
-		tensorboard_path='../TensorBoard_v2'
+		model_path='../model_v3',
+		tensorboard_path='../TensorBoard_v3'
 		)
 
 	gan.train()
