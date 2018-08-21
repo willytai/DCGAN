@@ -10,7 +10,7 @@ from scipy.misc import imread
 
 class DCGAN(object):
     """docstring for DCGAN"""
-    def __init__(self, sess, batch_size=128, latent_dim=100, learning_rate=5e-5, steps=6000, drop_rate=0.5,
+    def __init__(self, sess, batch_size=128, latent_dim=100, learning_rate=5e-5, steps=600000, drop_rate=0.5,
     	interval=20, model_path='../model/', vis_path='../result/', data_path='../anime-faces', reload_model=None,
     	tensorboard_path='../TensorBoard'):
 
@@ -19,6 +19,7 @@ class DCGAN(object):
         self.latent_dim = latent_dim
         self.base_learning_rate = learning_rate
         self.steps = steps
+        self.start = 0
         self.momentum = 0.99
         self.interval = interval # interval to evaluate losses
         self.dropout = 1 - drop_rate
@@ -53,9 +54,13 @@ class DCGAN(object):
 
         meta_file = os.path.join(model, meta_file[0])
 
-        tf.reset_default_graph()
+        # tf.reset_default_graph()
         saver = tf.train.import_meta_graph(meta_file)
         saver.restore(self.sess, tf.train.latest_checkpoint(model))
+
+        import re
+        tmp = re.sub("../model/step-", "", model)
+        self.start = int(tmp) + 1
 
         # set parameters
         self.image = tf.get_default_graph().get_tensor_by_name('image:0')
@@ -75,11 +80,11 @@ class DCGAN(object):
         self.D_loss_fake = tf.get_default_graph().get_tensor_by_name('Loss/Neg_2:0')
         self.D_loss = tf.get_default_graph().get_tensor_by_name('Loss/Mean_1:0')
 
-        self.sum_g = tf.get_default_graph().get_tensor_by_name('G_loss:0')
-        self.sum_d = tf.get_default_graph().get_tensor_by_name('D_loss:0')
-
-        self.G_vars = [var for var in tf.trainable_variables() if 'generator' in var.name]
-        self.D_vars = [var for var in tf.trainable_variables() if 'discriminator' in var.name]
+        self.sum_g = tf.summary.scalar('G_loss', self.G_loss)
+        self.sum_d = tf.summary.scalar('D_loss', self.D_loss)
+        
+        self.G_opt = tf.get_default_graph().get_operation_by_name('RMSProp')
+        self.D_opt = tf.get_default_graph().get_operation_by_name('RMSProp_1')
 
         self.saver = tf.train.Saver()
 
@@ -251,6 +256,13 @@ class DCGAN(object):
         # saver
         self.saver = tf.train.Saver()
 
+        # this is better than Adam
+        self.G_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
+        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
+
+        print (self.G_opt.name)
+        print (self.D_opt.name)
+
     def save_model(self, step=None):
 
         if step is None:
@@ -292,12 +304,8 @@ class DCGAN(object):
 
     def train(self):
 
-    	# learning rate
+        # learning rate
         self.sum_lr = tf.summary.scalar('sum_lr', self.lr)
-
-        # this is better than Adam
-        self.G_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
-        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
 
         img_gen = self.image_generator()
         writer  = tf.summary.FileWriter(self.tensorboard_path, graph=self.sess.graph)
@@ -309,11 +317,10 @@ class DCGAN(object):
         # list to contain g_loss
         losses = list()
 
-        for step in range(self.steps):
+        for step in range(self.start, self.steps):
 
         	# decay learning rate
         	learning_rate = self.decay_lr(step, 5e3, 0.9)
-        	# learning_rate = tf.train.exponential_decay(self.base_learning_rate, step, 5e3, 0.9, staircase=True)
 
         	self.batch = img_gen.__next__()
         	self.z     = self.random_noise()
@@ -425,7 +432,7 @@ class DCGAN(object):
 
     def decay_lr(self, step, cycle, decay_rate):
 
-    	if step == 0:
+    	if step == self.start:
 
     		self.current_lr = self.base_learning_rate
     		return self.current_lr
@@ -437,9 +444,13 @@ class DCGAN(object):
     	return self.current_lr
 
 if __name__ == '__main__':
-	sess = tf.Session()
+	import os
+	os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+	gpu_options = tf.GPUOptions(allow_growth=True)
+	sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 	# test = DCGAN(sess)
 	# tf.global_variables_initializer().run(session=sess)
 	# test.save_model()
 
-	test = DCGAN(sess, reload_model='../model/best')
+	test = DCGAN(sess, reload_model='../model/step-110000')
+	test.train()

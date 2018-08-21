@@ -23,7 +23,8 @@ if __name__ == '__main__':
 		learning_rate=8e-5,
 		batch_size=128,
 		model_path='../model',
-		tensorboard_path='../TensorBoard'
+		tensorboard_path='../TensorBoard',
+		reload_model='../model/step-100000'
 		)
 
 	gan.train()
