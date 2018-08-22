@@ -11,7 +11,7 @@ from scipy.misc import imread
 class DCGAN(object):
     """docstring for DCGAN"""
     def __init__(self, sess, batch_size=128, latent_dim=100, learning_rate=5e-5, steps=6000, drop_rate=0.5,
-    	interval=20, model_path='../model/', vis_path='../result/', data_path='../anime-faces', reload_model=None,
+    	interval=20, model_path='../model/', vis_path='../result/', data_path='../anime-faces', load_checkpoint=None,
     	tensorboard_path='../TensorBoard'):
 
         self.sess = sess
@@ -19,7 +19,7 @@ class DCGAN(object):
         self.latent_dim = latent_dim
         self.base_learning_rate = learning_rate
         self.steps = steps
-        self.momentum = 0.99
+        self.momentum = 0.9
         self.interval = interval # interval to evaluate losses
         self.dropout = 1 - drop_rate
         self.model_path = model_path
@@ -27,6 +27,8 @@ class DCGAN(object):
         self.data_path = data_path
         self.tensorboard_path = tensorboard_path
         self.test_vec = np.random.uniform(0, 1, [25, self.latent_dim]).astype(np.float32) # used for visualization during training
+        self.load_checkpoint = load_checkpoint
+        self.start = 0
 
         if not os.path.isdir(self.model_path):
         	os.mkdir(self.model_path)
@@ -34,54 +36,13 @@ class DCGAN(object):
         	os.mkdir(self.vis_path)
 
         self.ReadData()
-        if reload_model is None:
-            self.CreateModel()
-        else:
-            self.load_model(reload_model)
+        self.CreateModel()
 
         if not os.path.isdir(self.model_path):
         	os.mkdir(self.model_path)
 
         if not os.path.isdir(self.tensorboard_path):
         	os.mkdir(self.tensorboard_path)
-
-    def load_model(self, model):
-
-        meta_file = [f for f in os.listdir(model) if f.endswith('meta')]
-
-        assert len(meta_file) == 1, 'There should only be one meta file in the model directory.'
-
-        meta_file = os.path.join(model, meta_file[0])
-
-        tf.reset_default_graph()
-        saver = tf.train.import_meta_graph(meta_file)
-        saver.restore(self.sess, tf.train.latest_checkpoint(model))
-
-        # set parameters
-        self.image = tf.get_default_graph().get_tensor_by_name('image:0')
-        self.noise = tf.get_default_graph().get_tensor_by_name('noise:0')
-        self.keep_prob = tf.get_default_graph().get_tensor_by_name('keep_prob:0')
-        self.is_training = tf.get_default_graph().get_tensor_by_name('is_training:0')
-        self.lr = tf.get_default_graph().get_tensor_by_name('learning_rate:0')
-
-        self.G = tf.get_default_graph().get_tensor_by_name('generator/conv2d_transpose_5/Sigmoid:0')
-        self.D_real = tf.get_default_graph().get_tensor_by_name('discriminator/dense/Sigmoid:0')
-        self.D_fake = tf.get_default_graph().get_tensor_by_name('discriminator_1/dense/Sigmoid:0')
-
-        self.sum_img = tf.summary.image('generated', self.G, max_outputs=4)
-
-        self.G_loss = tf.get_default_graph().get_tensor_by_name('Loss/Mean:0')
-        self.D_loss_real = tf.get_default_graph().get_tensor_by_name('Loss/Neg_1:0')
-        self.D_loss_fake = tf.get_default_graph().get_tensor_by_name('Loss/Neg_2:0')
-        self.D_loss = tf.get_default_graph().get_tensor_by_name('Loss/Mean_1:0')
-
-        self.sum_g = tf.get_default_graph().get_tensor_by_name('G_loss:0')
-        self.sum_d = tf.get_default_graph().get_tensor_by_name('D_loss:0')
-
-        self.G_vars = [var for var in tf.trainable_variables() if 'generator' in var.name]
-        self.D_vars = [var for var in tf.trainable_variables() if 'discriminator' in var.name]
-
-        self.saver = tf.train.Saver()
 
     def random_noise(self):
 
@@ -254,10 +215,26 @@ class DCGAN(object):
         self.G_vars = [var for var in tf.trainable_variables() if 'generator' in var.name]
         self.D_vars = [var for var in tf.trainable_variables() if 'discriminator' in var.name]
 
+    	# learning rate
+        self.sum_lr = tf.summary.scalar('sum_lr', self.lr)
+
+        # this is better than Adam
+        self.G_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
+        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
+
         # saver
         self.saver = tf.train.Saver()
 
+        if self.load_checkpoint is not None:
+        	ckpt = tf.train.latest_checkpoint(self.load_checkpoint)
+        	print ('reloading checkpoint from %s' % ckpt)
+        	self.saver.restore(self.sess, ckpt)
+        	self.start = 385000 + 1
+        else:
+	        tf.global_variables_initializer().run(session=self.sess)
+
     def save_model(self, step=None):
+
         self.saver.save(self.sess, os.path.join(self.model_path, "model.ckpt"), global_step=step)
 
     def save_result(self, step):
@@ -290,13 +267,6 @@ class DCGAN(object):
 
     def train(self):
 
-    	# learning rate
-        self.sum_lr = tf.summary.scalar('sum_lr', self.lr)
-
-        # this is better than Adam
-        self.G_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
-        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
-
         # remove previous tensorboard files
         shit = [f for f in os.listdir(self.tensorboard_path)]
         for s in shit:
@@ -307,12 +277,10 @@ class DCGAN(object):
         total_loss = 1000
         start_time = time.time()
 
-        tf.global_variables_initializer().run(session=self.sess)
-
         # list to contain g_loss
         losses = list()
 
-        for step in range(self.steps):
+        for step in range(self.start, self.steps):
 
         	# decay learning rate
         	learning_rate = self.decay_lr(step, 1e3, 0.95)
@@ -418,7 +386,7 @@ class DCGAN(object):
 
     def decay_lr(self, step, cycle, decay_rate):
 
-    	if step == 0:
+    	if step == self.start:
 
     		self.current_lr = self.base_learning_rate
     		return self.current_lr
@@ -435,4 +403,4 @@ if __name__ == '__main__':
 	# tf.global_variables_initializer().run(session=sess)
 	# test.save_model()
 
-	test = DCGAN(sess, reload_model='../model/best')
+	# test = DCGAN(sess, load_checkpoint='../model/best')
