@@ -105,12 +105,13 @@ class DCGAN(object):
             x = tf.layers.dense(x, units=1*1*1024, activation=tf.nn.leaky_relu, 
             	kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
                 bias_initializer=tf.truncated_normal_initializer(stddev=0.02))
+            x = tf.layers.dropout(x, keep_prob)
             x = tf.reshape(x, shape=[-1, 1, 1, 1024])
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 3*3*1024
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
             x = self.deconv2d(x,  512, [3, 3], padding='valid')
-            # x = tf.layers.dropout(x, keep_prob)
+            x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 6*6*512
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
@@ -163,17 +164,17 @@ class DCGAN(object):
             # shape 8*8*256
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
             x = self.conv2d(x,  128, [3, 3])
-            x = tf.layers.dropout(x, keep_prob)
+            # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 4*4*512
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
             x = self.conv2d(x,  256, [3, 3])
-            x = tf.layers.dropout(x, keep_prob)
+            # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 2*2*1024
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
             x = self.conv2d(x,  512, [3, 3])
-            x = tf.layers.dropout(x, keep_prob)
+            # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 1*1*1
             # x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
