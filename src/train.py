@@ -20,7 +20,7 @@ if __name__ == '__main__':
 		drop_rate=0.4,
 		interval=50,
 		steps=600000,
-		learning_rate=1e-4,
+		learning_rate=5e-5,
 		batch_size=128,
 		model_path='../model_v3',
 		tensorboard_path='../TensorBoard_v3',

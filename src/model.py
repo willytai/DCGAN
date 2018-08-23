@@ -333,7 +333,7 @@ class DCGAN(object):
 	       	writer.add_summary(summary_fake_out, step)
 
        		# update G network
-       		self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
+       		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
        		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
 
        		# update G network twice
