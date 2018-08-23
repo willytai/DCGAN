@@ -24,7 +24,7 @@ if __name__ == '__main__':
 		batch_size=128,
 		model_path='../model_v3',
 		tensorboard_path='../TensorBoard_v3',
-		# load_checkpoint='../model_v3/step_1/'
+		# load_checkpoint='../model_v3/check_1/'
 		)
 
 	gan.train()

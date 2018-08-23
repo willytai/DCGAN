@@ -26,7 +26,7 @@ class DCGAN(object):
         self.vis_path = vis_path
         self.data_path = data_path
         self.tensorboard_path = tensorboard_path
-        self.test_vec = np.random.uniform(0, 1, [25, self.latent_dim]).astype(np.float32) # used for visualization during training
+        self.test_vec = np.random.normal(0, 1, [25, self.latent_dim]).astype(np.float32) # used for visualization during training
         self.load_checkpoint = load_checkpoint
         self.start = 0
 
@@ -46,7 +46,17 @@ class DCGAN(object):
 
     def random_noise(self):
 
-    	return np.random.uniform(0, 1, [self.batch_size, self.latent_dim]).astype(np.float32)
+    	return np.random.normal(0, 1, [self.batch_size, self.latent_dim]).astype(np.float32)
+
+    def noisy_label(self, ones):
+
+    	if ones:
+
+    		return np.random.uniform(0.8, 1, [self.batch_size, 1]).astype(np.float32)
+
+    	else:
+
+    		return np.random.uniform(0, 0.2, [self.batch_size, 1]).astype(np.float32)
 
     def deconv2d(self, inputs, filters, kernel_size, alpha=0.2, padding='same', sigmoid=False, strides=2):
 
@@ -56,8 +66,8 @@ class DCGAN(object):
         if not sigmoid:
             activation = lrelu
         else:
-            activation = tf.nn.sigmoid
-            # activation = tf.nn.tanh
+            # activation = tf.nn.sigmoid
+            activation = tf.nn.tanh
 
         tmp = tf.layers.conv2d_transpose(
                 inputs=inputs,
@@ -92,7 +102,7 @@ class DCGAN(object):
             x = z
             print ('{:50} {}'.format(x.name, x.shape))
             # project and reshape 1*1*1024
-            x = tf.layers.dense(x, units=1*1*1024, activation=tf.nn.relu, 
+            x = tf.layers.dense(x, units=1*1*1024, activation=tf.nn.leaky_relu, 
             	kernel_initializer=tf.truncated_normal_initializer(stddev=0.02),
                 bias_initializer=tf.truncated_normal_initializer(stddev=0.02))
             x = tf.reshape(x, shape=[-1, 1, 1, 1024])
@@ -203,9 +213,14 @@ class DCGAN(object):
         	return tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=x)
 
         with tf.name_scope('Loss'):
-	        self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_fake), self.D_fake_logits))
-	        self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_real), self.D_real_logits))
-	        self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.zeros_like(self.D_fake), self.D_fake_logits))
+	        # self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_fake), self.D_fake_logits))
+	        # self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_real), self.D_real_logits))
+	        # self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.zeros_like(self.D_fake), self.D_fake_logits))
+	        
+	        # use noisy labels for discriminator
+	        self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=True), self.D_fake_logits))
+	        self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=True), self.D_real_logits))
+	        self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=False), self.D_fake_logits))
 	        self.D_loss = self.D_loss_real + self.D_loss_fake
 
         self.sum_g = tf.summary.scalar('G_loss', self.G_loss)
@@ -219,17 +234,21 @@ class DCGAN(object):
         self.sum_lr = tf.summary.scalar('sum_lr', self.lr)
 
         # this is better than Adam
-        self.G_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
+        # self.G_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
+        
+        # adam for generator, rmsprop for discriminator
+        self.G_opt = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
         self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
 
         # saver
         self.saver = tf.train.Saver()
 
         if self.load_checkpoint is not None:
-        	ckpt = tf.train.latest_checkpoint(self.load_checkpoint)
+        	# ckpt = tf.train.latest_checkpoint(self.load_checkpoint)
+        	ckpt = self.load_checkpoint + 'model.ckpt-70000'
         	print ('reloading checkpoint from %s' % ckpt)
         	self.saver.restore(self.sess, ckpt)
-        	self.start = 385000 + 1
+        	self.start = 70000 + 1
         else:
 	        tf.global_variables_initializer().run(session=self.sess)
 
@@ -283,7 +302,7 @@ class DCGAN(object):
         for step in range(self.start, self.steps):
 
         	# decay learning rate
-        	learning_rate = self.decay_lr(step, 1e3, 0.95)
+        	learning_rate = self.decay_lr(step, 5e6, 0.95)
 
         	self.batch = img_gen.__next__()
         	self.z     = self.random_noise()
@@ -305,23 +324,25 @@ class DCGAN(object):
 
        		# update D network
        		things = [self.D_opt, self.sum_d, self.D_loss_real, self.D_loss_fake, self.D_loss, self.sum_lr, self.sum_real_out, self.sum_fake_out]
-       		_, summary_d, d_loss_real, d_loss_fake, d_loss, summary_lr, summary_real_out, summary_fake_out = self.sess.run(things, feed_dict=feed_dict_d)
-       		
-       		writer.add_summary(summary_d, step)
-       		writer.add_summary(summary_lr, step)
-       		writer.add_summary(summary_real_out, step)
-       		writer.add_summary(summary_fake_out, step)
+	       	_, summary_d, d_loss_real, d_loss_fake, d_loss, summary_lr, summary_real_out, summary_fake_out = self.sess.run(things, feed_dict=feed_dict_d)
+	       	
+	       	writer.add_summary(summary_d, step)
+	       	writer.add_summary(summary_lr, step)
+	       	writer.add_summary(summary_real_out, step)
+	       	writer.add_summary(summary_fake_out, step)
 
        		# update G network
        		self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
+       		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
 
        		# update G network twice
-       		things = [self.G_opt, self.sum_g, self.G_loss, self.sum_img, self.sum_gen_out]
-       		_, summary, g_loss, image, summary_gen_out = self.sess.run(things, feed_dict=feed_dict_g)
-       		
-       		writer.add_summary(summary, step)
-       		writer.add_summary(image, step)
-       		writer.add_summary(summary_gen_out, step)
+	       	things = [self.G_opt, self.sum_g, self.G_loss, self.sum_img, self.sum_gen_out]
+	       	_, summary, g_loss, image, summary_gen_out = self.sess.run(things, feed_dict=feed_dict_g)
+	       	
+	       	writer.add_summary(summary, step)
+	       	writer.add_summary(image, step)
+	       	writer.add_summary(summary_gen_out, step)
+
 
        		print ("Step: [%6d/%6d] time: %4.4fs, lr: %.3e, d_loss_real: %.4f, d_loss_fake: %.4f, d_loss: %.4f, g_loss: %.4f" \
           			% (step, self.steps, time.time() - start_time, learning_rate, d_loss_real, d_loss_fake, d_loss, g_loss))
