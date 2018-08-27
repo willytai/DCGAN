@@ -18,7 +18,7 @@ class DCGAN(object):
         self.batch_size = batch_size
         self.latent_dim = latent_dim
         self.base_learning_rate = learning_rate
-        self.steps = steps
+        self.steps = steps + 1
         self.momentum = 0.9
         self.interval = interval # interval to evaluate losses
         self.dropout = 1 - drop_rate
@@ -26,9 +26,9 @@ class DCGAN(object):
         self.vis_path = vis_path
         self.data_path = data_path
         self.tensorboard_path = tensorboard_path
-        self.test_vec = np.random.normal(0, 1, [25, self.latent_dim]).astype(np.float32) # used for visualization during training
+        self.test_vec = np.random.normal(-1, 1, [25, self.latent_dim]).astype(np.float32) # used for visualization during training
         self.load_checkpoint = load_checkpoint
-        self.start = 0
+        self.start = 1
 
         if not os.path.isdir(self.model_path):
         	os.mkdir(self.model_path)
@@ -46,17 +46,17 @@ class DCGAN(object):
 
     def random_noise(self):
 
-    	return np.random.normal(0, 1, [self.batch_size, self.latent_dim]).astype(np.float32)
+    	return np.random.normal(-1, 1, [self.batch_size, self.latent_dim]).astype(np.float32)
 
     def noisy_label(self, ones):
 
     	if ones:
 
-    		return np.random.uniform(0.8, 1, [self.batch_size, 1]).astype(np.float32)
+    		return np.random.uniform(0.9, 1, [self.batch_size, 1]).astype(np.float32)
 
     	else:
 
-    		return np.random.uniform(0, 0.2, [self.batch_size, 1]).astype(np.float32)
+    		return np.random.uniform(0, 0.1, [self.batch_size, 1]).astype(np.float32)
 
     def deconv2d(self, inputs, filters, kernel_size, alpha=0.2, padding='same', sigmoid=False, strides=2):
 
@@ -120,22 +120,22 @@ class DCGAN(object):
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 12*12*256
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,  128, [3, 3])
+            x = self.deconv2d(x,  128, [5, 5])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 24*24*128
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,   64, [3, 3])
+            x = self.deconv2d(x,   64, [5, 5])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 48*48*64
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,   32, [3, 3])
+            x = self.deconv2d(x,   32, [5, 5])
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 96*96*3
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.deconv2d(x,    3, [3, 3], sigmoid=True)
+            x = self.deconv2d(x,    3, [7, 7], sigmoid=True)
             # x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}\n'.format(x.name, x.shape))
 
@@ -153,12 +153,12 @@ class DCGAN(object):
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 32*32*64
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.conv2d(x,   32, [3, 3], strides=3)
+            x = self.conv2d(x,   32, [5, 5], strides=3)
             x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 16*16*128
             x = tf.contrib.layers.batch_norm(x, is_training=is_training, decay=self.momentum, scale=True)
-            x = self.conv2d(x,   64, [3, 3])
+            x = self.conv2d(x,   64, [5, 5])
             x = tf.layers.dropout(x, keep_prob)
             print ('{:50} {}'.format(x.name, x.shape))
             # shape 8*8*256
@@ -205,9 +205,9 @@ class DCGAN(object):
         self.D_fake_logits, self.D_fake = self.discriminator(self.G, self.dropout, self.is_training, reuse=True)
 
         self.sum_img = tf.summary.image('generated', self.G, max_outputs=4)
-        self.sum_real_out = tf.summary.histogram('real_img_result_the_closer_to_1_the_better', self.D_real)
-        self.sum_fake_out = tf.summary.histogram('fake_img_result_the_closer_to_0_the_better', self.D_fake)
-        self.sum_gen_out  = tf.summary.histogram('gen__img_result_the_closer_to_1_the_better', self.D_fake)
+        self.sum_real_out = tf.summary.histogram('real_img_result_the_closer_to_0_the_better', self.D_real)
+        self.sum_fake_out = tf.summary.histogram('fake_img_result_the_closer_to_1_the_better', self.D_fake)
+        self.sum_gen_out  = tf.summary.histogram('gen__img_result_the_closer_to_0_the_better', self.D_fake)
 
         # define loss
         def sigmoid_cross_entropy_with_logits(y, x):
@@ -218,10 +218,16 @@ class DCGAN(object):
 	        # self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_real), self.D_real_logits))
 	        # self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.zeros_like(self.D_fake), self.D_fake_logits))
 	        
-	        # use noisy labels for discriminator
-	        self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=True), self.D_fake_logits))
-	        self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=True), self.D_real_logits))
-	        self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=False), self.D_fake_logits))
+	        # use noisy labels for discriminator only
+	        # self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.ones_like(self.D_fake), self.D_fake_logits))
+	        # self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=True), self.D_real_logits))
+	        # self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=False), self.D_fake_logits))
+	        
+	        # flip lables
+	        self.G_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(tf.zeros_like(self.D_fake), self.D_fake_logits))
+	        self.D_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=False), self.D_real_logits))
+	        self.D_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.noisy_label(ones=True), self.D_fake_logits))
+	        
 	        self.D_loss = self.D_loss_real + self.D_loss_fake
 
         self.sum_g = tf.summary.scalar('G_loss', self.G_loss)
@@ -239,17 +245,17 @@ class DCGAN(object):
         
         # adam for generator, rmsprop for discriminator
         self.G_opt = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
-        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
+        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr+2e-5).minimize(self.D_loss, var_list=self.D_vars)
 
         # saver
         self.saver = tf.train.Saver()
 
         if self.load_checkpoint is not None:
         	# ckpt = tf.train.latest_checkpoint(self.load_checkpoint)
-        	ckpt = self.load_checkpoint + 'model.ckpt-70000'
+        	ckpt = self.load_checkpoint + 'model.ckpt-510000'
         	print ('reloading checkpoint from %s' % ckpt)
         	self.saver.restore(self.sess, ckpt)
-        	self.start = 70000 + 1
+        	self.start = 1
         else:
 	        tf.global_variables_initializer().run(session=self.sess)
 
@@ -262,7 +268,7 @@ class DCGAN(object):
     	feed_dict = {
     		self.noise: self.test_vec,
     		self.keep_prob: 1.0,
-    		self.is_training: False
+    		self.is_training: True
     	}
 
     	pics = self.sess.run(self.G, feed_dict=feed_dict)
@@ -294,11 +300,7 @@ class DCGAN(object):
 
         img_gen = self.image_generator()
         writer  = tf.summary.FileWriter(self.tensorboard_path, graph=self.sess.graph)
-        total_loss = 1000
         start_time = time.time()
-
-        # list to contain g_loss
-        losses = list()
 
         for step in range(self.start, self.steps):
 
@@ -333,7 +335,7 @@ class DCGAN(object):
 	       	writer.add_summary(summary_fake_out, step)
 
        		# update G network
-       		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
+       		self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
        		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
 
        		# update G network twice
@@ -346,25 +348,11 @@ class DCGAN(object):
 
 
        		print ("Step: [%6d/%6d] time: %4.4fs, lr: %.3e, d_loss_real: %.4f, d_loss_fake: %.4f, d_loss: %.4f, g_loss: %.4f" \
-          			% (step, self.steps, time.time() - start_time, learning_rate, d_loss_real, d_loss_fake, d_loss, g_loss))
+          			% (step, self.steps-1, time.time() - start_time, learning_rate, d_loss_real, d_loss_fake, d_loss, g_loss))
 
-       		# store g_loss
-       		losses.append(g_loss)
-
-        	# evaluate training process every specified interval
-        	if step != 0 and step % self.interval == 0:
-
-        		g_loss = np.array(losses).mean()
-        		losses = list()
-
-        		print ('-------------------------------------------------------')
-        		print ('- Best g_loss: %.4f' % total_loss, 'Current g_loss: %.4f' % g_loss)
-        		print ('- Learning rate: %.8f' % learning_rate)
-        		print ('-------------------------------------------------------')
-
-        	# save model every 1000 step after updating 50000 times
-        	if step != 0 and step >= 30000 and step % 5000 == 0:
-        		self.save_model(step=step)
+        	# if step != 0 and step % 2000 == 0:
+        print ('End of training, saving model...')
+        self.save_model(step=step)
 
     def ReadData(self):
 
@@ -402,7 +390,7 @@ class DCGAN(object):
     			for i in range(self.batch_size):
 
     				pth = self.train_pics[batch*self.batch_size+i]
-    				img.append(np.array(imread(pth)) / 255)
+    				img.append(np.array(imread(pth)) / 255 * 2 - 1) # normalize to (-1, 1)
     		
     			yield np.array(img)
 
@@ -421,7 +409,7 @@ class DCGAN(object):
 
 if __name__ == '__main__':
 	sess = tf.Session()
-	# test = DCGAN(sess)
+	test = DCGAN(sess)
 	# tf.global_variables_initializer().run(session=sess)
 	# test.save_model()
 

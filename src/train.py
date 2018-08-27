@@ -19,7 +19,7 @@ if __name__ == '__main__':
 		tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)),
 		drop_rate=0.4,
 		interval=50,
-		steps=600000,
+		steps=10000,
 		learning_rate=5e-5,
 		batch_size=128,
 		model_path='../model_v3',
