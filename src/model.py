@@ -252,10 +252,10 @@ class DCGAN(object):
 
         if self.load_checkpoint is not None:
         	# ckpt = tf.train.latest_checkpoint(self.load_checkpoint)
-        	ckpt = self.load_checkpoint + 'model.ckpt-510000'
+        	ckpt = self.load_checkpoint + 'model.ckpt-10000'
         	print ('reloading checkpoint from %s' % ckpt)
         	self.saver.restore(self.sess, ckpt)
-        	self.start = 1
+        	self.start = 10001
         else:
 	        tf.global_variables_initializer().run(session=self.sess)
 

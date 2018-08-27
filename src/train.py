@@ -19,12 +19,12 @@ if __name__ == '__main__':
 		tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)),
 		drop_rate=0.4,
 		interval=50,
-		steps=10000,
+		steps=100000,
 		learning_rate=5e-5,
 		batch_size=128,
 		model_path='../model_v3',
 		tensorboard_path='../TensorBoard_v3',
-		# load_checkpoint='../model_v3/check_1/'
+		load_checkpoint='../model_v3/check_1/'
 		)
 
 	gan.train()
