@@ -47,10 +47,10 @@ class DCGAN(object):
 
     	return np.random.normal(-1, 1, [self.batch_size, self.latent_dim]).astype(np.float32)
 
+
     def noisy_label(self, ones):
 
     	if ones:
-
     		return np.random.uniform(0.9, 1, [self.batch_size, 1]).astype(np.float32)
 
     	else:
@@ -308,6 +308,10 @@ class DCGAN(object):
         	# decay learning rate
         	learning_rate = self.decay_lr(step, 5e6, 0.95)
 
+        	# decay learning rate
+        	learning_rate = self.decay_lr(step, 5e3, 0.9)
+        	# learning_rate = tf.train.exponential_decay(self.base_learning_rate, step, 5e3, 0.9, staircase=True)
+
         	self.batch = img_gen.__next__()
         	self.z     = self.random_noise()
 
@@ -325,7 +329,6 @@ class DCGAN(object):
        			self.is_training: True,
        			self.lr: learning_rate
        		}
-
 
        		# update D network
        		things = [self.D_opt, self.sum_d, self.D_loss_real, self.D_loss_fake, self.D_loss, self.sum_lr, self.sum_real_out, self.sum_fake_out]
@@ -402,7 +405,7 @@ class DCGAN(object):
 
     		self.current_lr = self.base_learning_rate
     		return self.current_lr
-
+      
     	elif step % cycle == 0:
 
     		self.current_lr *= decay_rate
