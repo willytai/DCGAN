@@ -11,7 +11,7 @@ from scipy.misc import imread
 class DCGAN(object):
     """docstring for DCGAN"""
     def __init__(self, sess, batch_size=128, latent_dim=100, learning_rate=5e-5, steps=6000, drop_rate=0.5,
-    	interval=20, model_path='../model/', vis_path='../result/', data_path='../anime-faces', load_checkpoint=None,
+    	model_path='../model/', vis_path='../result/', data_path='../anime-faces', load_checkpoint=None,
     	tensorboard_path='../TensorBoard'):
 
         self.sess = sess
@@ -20,7 +20,6 @@ class DCGAN(object):
         self.base_learning_rate = learning_rate
         self.steps = steps + 1
         self.momentum = 0.9
-        self.interval = interval # interval to evaluate losses
         self.dropout = 1 - drop_rate
         self.model_path = model_path
         self.vis_path = vis_path
@@ -245,17 +244,19 @@ class DCGAN(object):
         
         # adam for generator, rmsprop for discriminator
         self.G_opt = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.G_loss, var_list=self.G_vars)
-        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr+2e-5).minimize(self.D_loss, var_list=self.D_vars)
+        # self.D_opt = tf.train.GradientDescentOptimizer(learning_rate=self.lr+2e-5).minimize(self.D_loss, var_list=self.D_vars)
+        self.D_opt = tf.train.RMSPropOptimizer(learning_rate=self.lr).minimize(self.D_loss, var_list=self.D_vars)
+
 
         # saver
         self.saver = tf.train.Saver()
 
         if self.load_checkpoint is not None:
         	# ckpt = tf.train.latest_checkpoint(self.load_checkpoint)
-        	ckpt = self.load_checkpoint + 'model.ckpt-10000'
+        	ckpt = self.load_checkpoint + 'model.ckpt-100000'
         	print ('reloading checkpoint from %s' % ckpt)
         	self.saver.restore(self.sess, ckpt)
-        	self.start = 10001
+        	self.start = 1
         else:
 	        tf.global_variables_initializer().run(session=self.sess)
 
@@ -325,6 +326,7 @@ class DCGAN(object):
        			self.lr: learning_rate
        		}
 
+
        		# update D network
        		things = [self.D_opt, self.sum_d, self.D_loss_real, self.D_loss_fake, self.D_loss, self.sum_lr, self.sum_real_out, self.sum_fake_out]
 	       	_, summary_d, d_loss_real, d_loss_fake, d_loss, summary_lr, summary_real_out, summary_fake_out = self.sess.run(things, feed_dict=feed_dict_d)
@@ -335,7 +337,7 @@ class DCGAN(object):
 	       	writer.add_summary(summary_fake_out, step)
 
        		# update G network
-       		self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
+       		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
        		# self.sess.run([self.G_opt, self.G_loss], feed_dict=feed_dict_g)
 
        		# update G network twice
