@@ -18,13 +18,12 @@ if __name__ == '__main__':
 	gan = DCGAN(
 		tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)),
 		drop_rate=0.4,
-		interval=50,
-		steps=600000,
-		learning_rate=8e-5,
+		steps=20000,
+		learning_rate=5e-5,
 		batch_size=128,
-		model_path='../model',
-		tensorboard_path='../TensorBoard',
-		reload_model='../model/step-100000'
+		model_path='../model_v3',
+		tensorboard_path='../TensorBoard_v3',
+		load_checkpoint='../model_v3/check_3/'
 		)
 
 	gan.train()
